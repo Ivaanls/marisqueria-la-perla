@@ -77,8 +77,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
-html {
+html, body {
   overflow-x: hidden;
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -254,7 +255,7 @@ html {
 }
 @media (max-width: 768px) {
   .pulpo-footer {
-    width: 100vw;
+    width: 100%;
     transform: translateX(-50%) translateY(80%);
   }
 }
@@ -992,8 +993,11 @@ html {
   .gm-card {
     top: auto;
     bottom: 1rem;
-    right: 50%;
-    transform: translateX(50%);
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+    transform: none;
   }
 }
 .gm-card-img {
