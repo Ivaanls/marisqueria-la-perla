@@ -175,6 +175,11 @@ function normalizeApostrophes(s) {
   return s.replace(/[\u2018\u2019]/g, "'");
 }
 
+const CANONICAL_PATTERNS = CANONICAL_SECTIONS.map(c => {
+  const key = normalizeApostrophes(c).toLowerCase();
+  return { c, pattern: new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`) };
+});
+
 function matchCanonicalSection(name) {
   const normalized = normalizeApostrophes(name).toLowerCase();
   // Exact match first
@@ -183,9 +188,7 @@ function matchCanonicalSection(name) {
   }
   // Keyword-contained match: "Overview & Creative North Star" -> "Overview",
   // "Elevation & Depth" -> "Elevation", etc.
-  for (const c of CANONICAL_SECTIONS) {
-    const key = normalizeApostrophes(c).toLowerCase();
-    const pattern = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+  for (const { c, pattern } of CANONICAL_PATTERNS) {
     if (pattern.test(normalized)) return c;
   }
   return null;
@@ -366,7 +369,7 @@ function extractColors(section) {
     if (!sub.name || /Named Rules?/i.test(sub.name) || /^The\s/i.test(sub.name)) continue;
 
     const bullets = collectBullets(sub.lines);
-    const parsed = bullets.map((b) => parseColorBullet(b)).filter(Boolean);
+    const parsed = bullets.flatMap((b) => { const r = parseColorBullet(b); return r ? [r] : []; });
     if (parsed.length === 0) continue;
 
     // If every bullet starts with a role keyword (Primary/Secondary/...), promote
@@ -387,16 +390,18 @@ function extractColors(section) {
   // scanning the whole section as a flat bullet list.
   if (groups.length === 0) {
     const flat = collectBullets(section.lines)
-      .map((b) => parseColorBullet(b))
-      .filter(Boolean);
+      .flatMap((b) => { const r = parseColorBullet(b); return r ? [r] : []; });
     if (flat.length) {
+      let paletteGroup = null;
       for (const p of flat) {
         if (p.name && ROLE_KEYWORDS.test(p.name)) {
           groups.push({ role: p.name, colors: [p] });
         } else {
-          const fallback = groups.find((g) => g.role === 'Palette');
-          if (fallback) fallback.colors.push(p);
-          else groups.push({ role: 'Palette', colors: [p] });
+          if (!paletteGroup) {
+            paletteGroup = { role: 'Palette', colors: [] };
+            groups.push(paletteGroup);
+          }
+          paletteGroup.colors.push(p);
         }
       }
     }
@@ -564,7 +569,7 @@ function extractTypography(section) {
   const hierSub = subs.find((s) => s.name && /hierarch/i.test(s.name));
   if (hierSub) {
     const bullets = collectBullets(hierSub.lines);
-    hierarchy = bullets.map(parseTypeBullet).filter(Boolean);
+    hierarchy = bullets.flatMap((b) => { const r = parseTypeBullet(b); return r ? [r] : []; });
   }
 
   return {
@@ -580,11 +585,11 @@ function normalizeFontRole(raw) {
   // Canonical roles the panel cares about: display, body, label, mono.
   // Stitch often writes compound roles like "display-&-headlines" or "ui-&-body"
   // — collapse them to the first canonical role present.
-  const tokens = raw.split(/[-/&\s]+/).filter(Boolean);
+  const tokens = new Set(raw.split(/[-/&\s]+/).filter(Boolean));
   const priority = ['display', 'headline', 'body', 'ui', 'label', 'mono'];
   const canonical = { headline: 'display', ui: 'body' };
   for (const p of priority) {
-    if (tokens.includes(p)) return canonical[p] || p;
+    if (tokens.has(p)) return canonical[p] || p;
   }
   return null;
 }

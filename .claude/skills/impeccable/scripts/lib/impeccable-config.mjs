@@ -145,10 +145,10 @@ export function writeDetectionConfig(root, detectorConfig, opts = {}) {
 function normalizeDetectionConfigForWrite(config) {
   const out = {};
   if (Array.isArray(config?.ignoreRules)) {
-    out.ignoreRules = uniqueStrings(config.ignoreRules.map((rule) => normalizeIgnoreRule(rule)).filter(Boolean));
+    out.ignoreRules = uniqueStrings(config.ignoreRules.flatMap((rule) => { const r = normalizeIgnoreRule(rule); return r ? [r] : []; }));
   }
   if (Array.isArray(config?.ignoreFiles)) {
-    out.ignoreFiles = uniqueStrings(config.ignoreFiles.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim()));
+    out.ignoreFiles = uniqueStrings(config.ignoreFiles.reduce((acc, v) => { if (typeof v === 'string' && v.trim()) acc.push(v.trim()); return acc; }, []));
   }
   out.ignoreValues = normalizeIgnoreValueEntries(config?.ignoreValues || []);
   if (config?.designSystem && typeof config.designSystem === 'object' && !Array.isArray(config.designSystem)) {
@@ -240,10 +240,10 @@ function splitColorArgs(body) {
   const text = String(body || '').trim();
   if (!text) return [];
   if (text.includes(',')) {
-    const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+    const parts = text.split(',').flatMap((part) => { const p = part.trim(); return p ? [p] : []; });
     const last = parts[parts.length - 1];
     if (last && last.includes('/')) {
-      const split = last.split('/').map((part) => part.trim()).filter(Boolean);
+      const split = last.split('/').flatMap((part) => { const p = part.trim(); return p ? [p] : []; });
       return [...parts.slice(0, -1), ...split];
     }
     return parts;
@@ -343,7 +343,7 @@ export function normalizeIgnoreValueEntries(entries) {
     const normalized = { rule, value };
     const files = uniqueStrings([
       ...(typeof entry.file === 'string' && entry.file.trim() ? [entry.file.trim()] : []),
-      ...(Array.isArray(entry.files) ? entry.files.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim()) : []),
+      ...(Array.isArray(entry.files) ? entry.files.reduce((acc, v) => { if (typeof v === 'string' && v.trim()) acc.push(v.trim()); return acc; }, []) : []),
     ]);
     if (files.length > 0) normalized.files = files;
     if (typeof entry.reason === 'string' && entry.reason.trim()) {
@@ -391,7 +391,13 @@ function globToRegex(glob) {
       re += '[^/]';
       i += 1;
     } else if (c === '{') {
-      const end = glob.indexOf('}', i);
+      let end = -1;
+      for (let j = i; j < glob.length; j++) {
+        if (glob[j] === '}') {
+          end = j;
+          break;
+        }
+      }
       if (end === -1) { re += '\\{'; i += 1; continue; }
       const parts = glob.slice(i + 1, end).split(',').map((p) => p.replace(/[.+^$()|[\]\\]/g, '\\$&'));
       re += `(?:${parts.join('|')})`;
